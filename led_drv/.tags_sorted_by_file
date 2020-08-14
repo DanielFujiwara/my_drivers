@@ -1,0 +1,34 @@
+main	check.c	/^int main(int argc,char **argv)$/;"	f
+touch	check.c	/^void touch(int *x, int *y)$/;"	f
+key_close	key_drv.c	/^int key_close (struct inode * inode, struct file *file)$/;"	f
+key_fops	key_drv.c	/^struct file_operations key_fops={$/;"	v	typeref:struct:file_operations
+key_open	key_drv.c	/^int key_open (struct inode * inode, struct file *file)$/;"	f
+key_read	key_drv.c	/^ssize_t key_read (struct file *file, char __user *buf, size_t len, loff_t * offs)$/;"	f
+key_write	key_drv.c	/^ssize_t key_write (struct file *file,const char __user *buf, size_t len, loff_t *offset)$/;"	f
+keys_gpios	key_drv.c	/^static struct gpio keys_gpios[] ={$/;"	v	typeref:struct:gpio	file:
+keys_miscdev	key_drv.c	/^static struct miscdevice keys_miscdev = {$/;"	v	typeref:struct:miscdevice	file:
+mykey_exit	key_drv.c	/^module_exit(mykey_exit);$/;"	v
+mykey_exit	key_drv.c	/^static void __exit mykey_exit(void)$/;"	f	file:
+mykey_init	key_drv.c	/^module_init(mykey_init);$/;"	v
+mykey_init	key_drv.c	/^static int __init mykey_init(void)$/;"	f	file:
+__this_module	key_drv.mod.c	/^struct module __this_module$/;"	v	typeref:struct:module
+__used	key_drv.mod.c	/^__used$/;"	v	file:
+led_close	led_drv.c	/^int led_close (struct inode * inode, struct file *file)$/;"	f
+led_fops	led_drv.c	/^struct file_operations led_fops={$/;"	v	typeref:struct:file_operations
+led_miscdev	led_drv.c	/^static struct miscdevice led_miscdev = {$/;"	v	typeref:struct:miscdevice	file:
+led_open	led_drv.c	/^int led_open (struct inode * inode, struct file *file)$/;"	f
+led_read	led_drv.c	/^ssize_t led_read (struct file *file, char __user *buf, size_t len, loff_t * offs)$/;"	f
+led_write	led_drv.c	/^ssize_t led_write (struct file *file,const char __user *buf, size_t len, loff_t *offset)$/;"	f
+leds_gpios	led_drv.c	/^static struct gpio leds_gpios[] = {$/;"	v	typeref:struct:gpio	file:
+myled_exit	led_drv.c	/^module_exit(myled_exit);$/;"	v
+myled_exit	led_drv.c	/^static void __exit myled_exit(void)$/;"	f	file:
+myled_init	led_drv.c	/^module_init(myled_init);$/;"	v
+myled_init	led_drv.c	/^static int __init myled_init(void)$/;"	f	file:
+__this_module	led_drv.mod.c	/^struct module __this_module$/;"	v	typeref:struct:module
+__used	led_drv.mod.c	/^__used$/;"	v	file:
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_PROGRAM_VERSION	5.8	//
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
