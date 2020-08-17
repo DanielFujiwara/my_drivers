@@ -1,3 +1,8 @@
+/*
+	混杂设备、中断、唤醒、ioctl
+*/
+
+
 #include <linux/init.h>		//__init __exit
 #include <linux/kernel.h>	//printk
 #include <linux/module.h>	//module_init module_exit...
@@ -11,23 +16,25 @@
 #include <cfg_type.h>
 #include <linux/miscdevice.h>//misc_register
 #include <linux/ioctl.h>
+#include <mach/devices.h>     //中断号
+#include <linux/interrupt.h>  //常用的函数接口
+#include <linux/delay.h>
+#include <linux/ioctl.h>
+#include <linux/sched.h>
 
 #define CMD_KEY_GET _IOR('K',0,unsigned int *)
               // 驱动层向应用层传递 // 
-// //声明一个key字符设备结构体
-// static struct cdev key_cdev;
 
-// //声明一个key的设备号
-// static dev_t key_num;
 
-// //声明一个key的类指针
-// static struct class  *key_class;
+//声明一个等待条件，真和假
+static int key_press_flag = 0;
 
-// //声明一个key的设备指针
-// static struct device  *key_device;
+//声明一个等待队列
+static wait_queue_head_t key_wq;
 
-// //声明一个key的资源指针
-// static struct resource *key_resource;
+
+static unsigned char key_val=0;
+
 
 static struct gpio keys_gpios[] ={
 { PAD_GPIO_A+28,GPIOF_DIR_IN,"KEY2"},
@@ -36,49 +43,30 @@ static struct gpio keys_gpios[] ={
 { PAD_GPIO_B+9,GPIOF_DIR_IN,"KEY6"},
 };
 
-//声明一个gpioa gpiob起始虚拟地址的指针
-// void __iomem *gpioa_va=NULL;
-// void __iomem *gpiob_va=NULL;
-// void __iomem *gpioc_va=NULL;
-// void __iomem *gpiod_va=NULL;
-// void __iomem *gpioe_va=NULL;
+//中断服务函数
+//irq，就是当前触发中断请求的中断号
+//dev，就是request_irq传递的参数
+irqreturn_t keys_irq_handler(int irq, void *dev)
+{
+	
+	
+	key_val = 0;
+	key_val |=(gpio_get_value(PAD_GPIO_A+28))?0:1;
+	key_val |=(gpio_get_value(PAD_GPIO_B+30))?0:(1<<1);
+	key_val |=(gpio_get_value(PAD_GPIO_B+31))?0:(1<<2);
+	key_val |=(gpio_get_value(PAD_GPIO_B+9))?0:(1<<3);
 
 
-// void __iomem *gpioa_out_va=NULL;
-// void __iomem *gpiob_out_va=NULL;
-// void __iomem *gpioc_out_va=NULL;
-// void __iomem *gpiod_out_va=NULL;
-// void __iomem *gpioe_out_va=NULL;
+			//设置条件为真
+		key_press_flag=1;
+		
+		
+		//唤醒队列
+		wake_up(&key_wq);
 
+		return IRQ_HANDLED;//当前中断处理已经完成
+}
 
-// void __iomem *gpioa_outenb_va=NULL;
-// void __iomem *gpiob_outenb_va=NULL;
-// void __iomem *gpioc_outenb_va=NULL;
-// void __iomem *gpiod_outenb_va=NULL;
-// void __iomem *gpioe_outenb_va=NULL;
-
-
-// void __iomem *gpioa_pad_va=NULL;
-// void __iomem *gpiob_pad_va=NULL;
-// void __iomem *gpioc_pad=NULL;
-// void __iomem *gpiod_pad=NULL;
-// void __iomem *gpioe_pad=NULL;
-
-
-// void __iomem *gpioa_atlfn0_va=NULL;
-// void __iomem *gpioa_atlfn1_va=NULL;
-
-// void __iomem *gpiob_atlfn0_va=NULL;
-// void __iomem *gpiob_atlfn1_va=NULL;
-
-// void __iomem *gpioc_atlfn0_va=NULL;
-// void __iomem *gpioc_atlfn1_va=NULL;
-
-// void __iomem *gpiod_atlfn0_va=NULL;
-// void __iomem *gpiod_atlfn1_va=NULL;
-
-// void __iomem *gpioe_atlfn0_va=NULL;
-// void __iomem *gpioe_atlfn1_va=NULL;
 
 
 //设备打开接口
@@ -113,7 +101,7 @@ ssize_t key_write (struct file *file,const char __user *buf, size_t len, loff_t 
 ssize_t key_read (struct file *file, char __user *buf, size_t len, loff_t * offs)
 {
 	int rt;
-	char key_val = 0;
+	// char key_val = 0;
 	// unsigned int pada = 0;
 	// unsigned int padb = 0;
 	
@@ -124,21 +112,7 @@ ssize_t key_read (struct file *file, char __user *buf, size_t len, loff_t * offs
 	if(len >sizeof key_val)
 		len = sizeof key_val;
 
-	//读取按键的电平
-	//K2按键的电平，对应key_val的bit0
-	//K3按键的电平，对应key_val的bit1	
-	//K4按键的电平，对应key_val的bit2
-	//K6按键的电平，对应key_val的bit3
 	
-	// pad=(*(volatile unsigned int *)gpioa_pad_va);
-	// pada = ioread32(gpioa_pad_va);
-	// padb = ioread32(gpiob_pad_va);
-	//若K2按键按下，bit0就设置为1，否则为0
-	
-	// key_val|=(pada &(1<<28))?0:1;
-	// key_val|=(padb &(1<<30))?0:(1<<1);
-	// key_val|=(padb &(1<<31))?0:(1<<2);
-	// key_val|=(padb &(1<<9))?0:(1<<3);
 	
 	key_val |=(gpio_get_value(PAD_GPIO_A+28))?0:1;
 	key_val |=(gpio_get_value(PAD_GPIO_B+30))?0:(1<<1);
@@ -166,18 +140,30 @@ long key_ioctl (struct file *filp, unsigned int cmd, unsigned long args)
 {
 	void __user *arpg = (void __user *)args;
 
-	unsigned int key_val = 0;
-
+	// unsigned int key_val = 0;
+	int rt;
 	switch(cmd)
 	{
 		case CMD_KEY_GET:
 		{
-				key_val |=(gpio_get_value(PAD_GPIO_A+28))?0:1;
-				key_val |=(gpio_get_value(PAD_GPIO_B+30))?0:(1<<1);
-				key_val |=(gpio_get_value(PAD_GPIO_B+31))?0:(1<<2);
-				key_val |=(gpio_get_value(PAD_GPIO_B+9))?0:(1<<3);
 
-				copy_to_user(arpg,&key_val,sizeof key_val);
+			//等待按键的事件，可中断睡眠
+			wait_event_interruptible(key_wq,key_press_flag);
+			key_press_flag=0;
+
+			//<在中断服务中对key_val 赋值>
+			// key_val |=(gpio_get_value(PAD_GPIO_A+28))?0:1;
+			// key_val |=(gpio_get_value(PAD_GPIO_B+30))?0:(1<<1);
+			// key_val |=(gpio_get_value(PAD_GPIO_B+31))?0:(1<<2);
+			// key_val |=(gpio_get_value(PAD_GPIO_B+9))?0:(1<<3);
+
+			rt = copy_to_user(arpg,&key_val,sizeof key_val);
+			// printk(KERN_INFO"key_val:%x\n",key_val);
+			// printk(KERN_INFO"copy_to_user\n");
+			// key_val=0;
+			
+			if(rt != 0)
+				return -ENOMEM;
 
 
 		}break;
@@ -239,222 +225,68 @@ static int __init mykey_init(void)
 		goto err_gpio_request_array;
 	}
 	
-
-
-
-
-	//////////old school///////////
-	//申请物理地址空间
-	// key_resource=request_mem_region(0xC001A000,0x28,"gpioa");
+	//中断号：gpio_to_irq(PAD_GPIO_A+28)
+	//中断服务函数：keys_irq_handler
+	//触发方式：下降沿触发，IRQF_TRIGGER_FALLING
+	//注册名字："gpioa28"
+	//传递参数：NULL
+	rt = request_irq(gpio_to_irq(PAD_GPIO_A+28),keys_irq_handler,IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING | IRQF_TRIGGER_FALLING,"gpioa28",NULL);
 	
-	// if(key_resource == NULL)
-	// {
-	// 	rt = -ENOMEM;
+	if(rt < 0)
+	{
+		printk("request_irq error\n");
 		
-	// 	printk(KERN_INFO"request_mem_region error gpioa\n");
+		goto err_request_irq;
 		
-	// 	goto err_request_mem_region;
-	// }
+	}
 
-	// key_resource=request_mem_region(0xC001B000,0x28,"gpiob");
+		rt = request_irq(gpio_to_irq(PAD_GPIO_B+30),keys_irq_handler,IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING,"gpiob30",NULL);
 	
-	// if(key_resource == NULL)
-	// {
-	// 	rt = -ENOMEM;
+	if(rt < 0)
+	{
+		printk("request_irq error\n");
 		
-	// 	printk(KERN_INFO"request_mem_region error gpiob\n");
+		goto err_request_irq;
 		
-	// 	goto err_request_mem_region;
-	// }
+	}
 
-	// key_resource=request_mem_region(0xC001C000,0x28,"gpioc");
+		rt = request_irq(gpio_to_irq(PAD_GPIO_B+31),keys_irq_handler,IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING,"gpiob31",NULL);
 	
-	// if(key_resource == NULL)
-	// {
-	// 	rt = -ENOMEM;
+	if(rt < 0)
+	{
+		printk("request_irq error\n");
 		
-	// 	printk(KERN_INFO"request_mem_region error gpioc\n");
+		goto err_request_irq;
 		
-	// 	goto err_request_mem_region;
-	// }
+	}
 
-	// key_resource=request_mem_region(0xC001D000,0x28,"gpiod");
+		rt = request_irq(gpio_to_irq(PAD_GPIO_B+9),keys_irq_handler,IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING,"gpiob9",NULL);
 	
-	// if(key_resource == NULL)
-	// {
-	// 	rt = -ENOMEM;
+	if(rt < 0)
+	{
+		printk("request_irq error\n");
 		
-	// 	printk(KERN_INFO"request_mem_region error gpiod\n");
+		goto err_request_irq;
 		
-	// 	goto err_request_mem_region;
-	// }
+	}
 
 
-	// key_resource=request_mem_region(0xC001E000,0x28,"gpioe");
-	
-	// if(key_resource == NULL)
-	// {
-	// 	rt = -ENOMEM;
-		
-	// 	printk(KERN_INFO"request_mem_region error\n");
-		
-	// 	goto err_request_mem_region;
-	// }
 
 
-	
-	//由于linux需要虚拟地址访问，将物理地址转换为虚拟地址
-	// gpioa_va=ioremap(0xC001A000,0x28);
-	
-	// if(gpioa_va == NULL)
-	// {
-	// 	rt = -ENOMEM;
-		
-	// 	printk(KERN_INFO"ioremap error\n");
-		
-	// 	goto err_ioremapa;
-	// }	
-
-	// gpiob_va=ioremap(0xC001B000,0x28);
-	
-	// if(gpiob_va == NULL)
-	// {
-	// 	rt = -ENOMEM;
-		
-	// 	printk(KERN_INFO"ioremap error\n");
-		
-	// 	goto err_ioremapb;
-	// }	
-
-
-	// gpioc_va=ioremap(0xC001C000,0x28);
-	
-	// if(gpioc_va == NULL)
-	// {
-	// 	rt = -ENOMEM;
-		
-	// 	printk(KERN_INFO"ioremap error\n");
-		
-	// 	goto err_ioremapc;
-	// }	
-
-
-	// gpiod_va=ioremap(0xC001D000,0x28);
-	
-	// if(gpiod_va == NULL)
-	// {
-	// 	rt = -ENOMEM;
-		
-	// 	printk(KERN_INFO"ioremap error\n");
-		
-	// 	goto err_ioremapd;
-	// }	
-
-	// gpioe_va=ioremap(0xC001E000,0x28);
-	
-	// if(gpioe_va == NULL)
-	// {
-	// 	rt = -ENOMEM;
-		
-	// 	printk(KERN_INFO"ioremap error\n");
-		
-	// 	goto err_ioremape;
-	// }	
-
-	
-	
-	//得到相应的寄存器虚拟地址
-	// gpioa_out_va    = gpioa_va+0x00;
-	// gpioa_outenb_va = gpioa_va+0x04;
-	// gpioa_pad_va    = gpioa_va+0x18;
-	// gpioa_atlfn0_va = gpioa_va+0x20;
-	// gpioa_atlfn1_va = gpioa_va+0x24;
-
-	// gpiob_out_va    = gpiob_va+0x00;
-	// gpiob_outenb_va = gpiob_va+0x04;
-	// gpiob_pad_va    = gpiob_va+0x18;
-	// gpiob_atlfn0_va = gpiob_va+0x20;
-	// gpiob_atlfn1_va = gpiob_va+0x24;
-
-	// gpioc_out_va    = gpioc_va+0x00;
-	// gpioc_outenb_va = gpioc_va+0x04;
-	// gpioc_atlfn0_va = gpioc_va+0x20;
-	// gpioc_atlfn1_va = gpioc_va+0x24;
-
-	// gpiod_out_va    = gpiod_va+0x00;
-	// gpiod_outenb_va = gpiod_va+0x04;
-	// gpiod_atlfn0_va = gpiod_va+0x20;
-	// gpiod_atlfn1_va = gpiod_va+0x24;
-
-	// gpioe_out_va    = gpioe_va+0x00;
-	// gpioe_outenb_va = gpioe_va+0x04;
-	// gpioe_atlfn0_va = gpioe_va+0x20;
-	// gpioe_atlfn1_va = gpioe_va+0x24;
-
-	// unsigned int v;
-	//按钮复用设置
-	//keyGPIOA28 AF0 ALTFN1
-	// GPIOAALTF1 &= ~(3<<24);//复用26 27置零
-	// v = ioread32(gpioa_atlfn1_va);
-	// v &= ~(3<<24);
-	// iowrite32(v,gpioa_atlfn1_va);
-
-	//keyGPIOB30	AF1 ALTFN1
-	//keyGPIOB31    AF1 ALTFN1
-	// v = ioread32(gpiob_atlfn1_va);
-	// v &= ~(3<<28);
-	// v |= (1<<28);
-	// iowrite32(v,gpiob_atlfn1_va);
-
-	// v = ioread32(gpiob_atlfn1_va);
-	// v &= ~(3<<30);
-	// v |= (1<<30);
-	// iowrite32(v,gpiob_atlfn1_va);
-	//keyGPIOB9 AF0 ALTFN0
-	// GPIOBALTF0 &= ~(3<<18);	
-	// v = ioread32(gpiob_atlfn0_va);
-	// v &= ~(3<<18);
-	// iowrite32(v,gpiob_atlfn0_va);
-
-	//按钮引脚设置输入模式
-	// GPIOAOUTENB &= ~(1<<28);
-	// GPIOBOUTENB &= ~(1<<30);
-	// GPIOBOUTENB &= ~(1<<31);
-	// GPIOBOUTENB &= ~(1<<9);
-
-	// v = ioread32(gpioa_outenb_va);
-	// v &= ~(1<<28);
-	// iowrite32(v,gpioa_outenb_va);
-
-	// v = ioread32(gpiob_outenb_va);
-	// v &= ~(1<<30);
-	// v &= ~(1<<31);
-	// v &= ~(1<<9);
-	// iowrite32(v,gpiob_outenb_va);
-
-
-	
+	//初始化等待队列
+	init_waitqueue_head(&key_wq);
 	printk(KERN_INFO"mykey_init\n");
+
 
 
 	//成功返回
 	return 0;
 	
-// err_ioremape:
-	// release_mem_region(0xC001E000,0x28);
-// err_ioremapd:
-// 	release_mem_region(0xC001D000,0x28);
-// err_ioremapc:
-	// release_mem_region(0xC001C000,0x28);
-// err_ioremapb:
-	// release_mem_region(0xC001B000,0x28);	
-// err_ioremapa:
-	// release_mem_region(0xC001A000,0x28);
 
 
 
-
-
+err_request_irq:
+	return rt;
 	
 err_gpio_request_array:
 	misc_deregister(&keys_miscdev);
@@ -466,30 +298,14 @@ err_misc_register:
 
 static void __exit mykey_exit(void)
 {
+	//释放中断
+	free_irq(gpio_to_irq(PAD_GPIO_A+28),NULL);
+	free_irq(gpio_to_irq(PAD_GPIO_B+30),NULL);
+	free_irq(gpio_to_irq(PAD_GPIO_B+31),NULL);
+	free_irq(gpio_to_irq(PAD_GPIO_B+9),NULL);
 	//解除映射
 	gpio_free_array(keys_gpios, ARRAY_SIZE(keys_gpios));
-	// iounmap(gpioa_va);
-	// iounmap(gpiob_va);
-	// iounmap(gpioc_va);
-	// iounmap(gpiod_va);
-	// iounmap(gpioe_va);
-	//释放物理内存
-	// release_mem_region(0xC001A000,0x28);
-	// release_mem_region(0xC001B000,0x28);
-	// release_mem_region(0xC001C000,0x28);
-	// release_mem_region(0xC001D000,0x28);
-	// release_mem_region(0xC001E000,0x28);
 
-	// //设备的销毁
-	// device_destroy(key_class,key_num);
-	
-	// //类的销毁
-	// class_destroy(key_class);
-	// //删除字符设备
-	// cdev_del(&key_cdev);
-	
-	// //注销设备号
-	// unregister_chrdev_region(key_num,1);
 
 
 		
