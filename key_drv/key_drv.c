@@ -1,5 +1,5 @@
 /*
-	混杂设备、中断、唤醒、ioctl
+	混杂设备、中断、唤醒、ioctl、等待队列、工作队列
 */
 
 
@@ -32,9 +32,195 @@ static int key_press_flag = 0;
 //声明一个等待队列
 static wait_queue_head_t key_wq;
 
+//
 
 static unsigned char key_val=0;
 
+//分配工作
+struct work_struct mywork;
+
+int dev_irq;
+
+//工作处理函数
+void mywork_handler(struct work_struct *work)
+{
+	key_val = 0;
+	// printk(KERN_INFO"work\n");
+	//睡眠10ms
+	// msleep(10);
+	
+	if(dev_irq == gpio_to_irq(PAD_GPIO_A+28))	
+	{
+		//[可选]延时去抖动
+		msleep(10);
+		//再次确认是否引脚有低电平，若是低电平，则为按键的按下
+		if(!(gpio_get_value(PAD_GPIO_A + 28)))
+		{
+			key_val|= 1<<0;		
+			// //设置条件为真
+			// key_press_flag=1;	
+			// //唤醒队列
+			// wake_up(&key_wq);
+		}
+
+	}
+
+
+	if(dev_irq == gpio_to_irq(PAD_GPIO_B+9))	
+	{
+		//[可选]延时去抖动
+		msleep(10);
+		if(!(gpio_get_value(PAD_GPIO_B + 9)))
+		{
+			key_val|= 1<<1;		
+			// //设置条件为真
+			// key_press_flag=1;	
+			// //唤醒队列
+			// wake_up(&key_wq);
+		}
+	}
+
+
+
+	if(dev_irq == gpio_to_irq(PAD_GPIO_B+30))	
+	{
+		//[可选]延时去抖动
+		msleep(10);
+		if(!(gpio_get_value(PAD_GPIO_B + 30)))
+		{
+			key_val|= 1<<2;		
+			// //设置条件为真
+			// key_press_flag=1;	
+			// //唤醒队列
+			// wake_up(&key_wq);
+		}
+
+	}
+
+
+
+	if(dev_irq == gpio_to_irq(PAD_GPIO_B+31))	
+	{
+		//[可选]延时去抖动
+		msleep(10);
+		if(!(gpio_get_value(PAD_GPIO_B + 31)))
+		{
+			key_val|= 1<<3;		
+			// //设置条件为真
+			// key_press_flag=1;	
+			// //唤醒队列
+			// wake_up(&key_wq);
+		}
+
+
+	}
+
+					//设置条件为真
+			key_press_flag=1;	
+			//唤醒队列
+			wake_up(&key_wq);
+
+
+}
+
+
+///////////上下为优化对立方案/////////////
+
+
+// tasklet在按键消抖中只能使用delay，delay是无用功且独占cpu资源
+//因此使用工作队列使用sleep来优化资源占用。
+// void  mytasklet_handler(unsigned long data)
+// {
+// 	key_val=0;
+	
+// 	//得到中断号
+// 	int irq = (int)data;
+// 	// 无法记录同一时间所有按钮状态
+// 	//原因：if判定条件为 gpio_io_irp,当按钮未被释放，按下另一个按钮时候irq没有被出发进入if 且key_val被清零，因此不能记录原有按钮状态
+
+// 	if(irq == gpio_to_irq(PAD_GPIO_A+28))	
+// 	{
+// 		//[可选]延时去抖动
+// 		mdelay(15);
+// 		//再次确认是否引脚有低电平，若是低电平，则为按键的按下
+// 		if(!(gpio_get_value(PAD_GPIO_A + 28)))
+// 		{
+// 			key_val|= 1<<0;		
+// 			// //设置条件为真
+// 			// key_press_flag=1;	
+// 			// //唤醒队列
+// 			// wake_up(&key_wq);
+// 		}
+
+// 	}
+
+
+// 	if(irq == gpio_to_irq(PAD_GPIO_B+9))	
+// 	{
+// 		//[可选]延时去抖动
+// 		mdelay(15);
+// 		if(!(gpio_get_value(PAD_GPIO_B + 9)))
+// 		{
+// 			key_val|= 1<<1;		
+// 			// //设置条件为真
+// 			// key_press_flag=1;	
+// 			// //唤醒队列
+// 			// wake_up(&key_wq);
+// 		}
+// 	}
+
+
+
+// 	if(irq == gpio_to_irq(PAD_GPIO_B+30))	
+// 	{
+// 		//[可选]延时去抖动
+// 		mdelay(15);
+// 		if(!(gpio_get_value(PAD_GPIO_B + 30)))
+// 		{
+// 			key_val|= 1<<2;		
+// 			// //设置条件为真
+// 			// key_press_flag=1;	
+// 			// //唤醒队列
+// 			// wake_up(&key_wq);
+// 		}
+
+// 	}
+
+
+
+// 	if(irq == gpio_to_irq(PAD_GPIO_B+31))	
+// 	{
+// 		//[可选]延时去抖动
+// 		mdelay(15);
+// 		if(!(gpio_get_value(PAD_GPIO_B + 31)))
+// 		{
+// 			key_val|= 1<<3;		
+// 			// //设置条件为真
+// 			// key_press_flag=1;	
+// 			// //唤醒队列
+// 			// wake_up(&key_wq);
+// 		}
+
+
+// 	}
+
+// 	// 	key_val = 0;
+// 	// 	mdelay(15);
+// 	// key_val |=(gpio_get_value(PAD_GPIO_A+28))?0:1;
+// 	// key_val |=(gpio_get_value(PAD_GPIO_B+30))?0:(1<<1);
+// 	// key_val |=(gpio_get_value(PAD_GPIO_B+31))?0:(1<<2);
+// 	// key_val |=(gpio_get_value(PAD_GPIO_B+9))?0:(1<<3);
+
+// 				//设置条件为真
+// 			key_press_flag=1;	
+// 			//唤醒队列
+// 			wake_up(&key_wq);
+
+	
+// }
+
+//静态创建小任务tasklet
+// DECLARE_TASKLET(mytasklet,mytasklet_handler, 0);
 
 static struct gpio keys_gpios[] ={
 { PAD_GPIO_A+28,GPIOF_DIR_IN,"KEY2"},
@@ -50,19 +236,30 @@ irqreturn_t keys_irq_handler(int irq, void *dev)
 {
 	
 	
-	key_val = 0;
-	key_val |=(gpio_get_value(PAD_GPIO_A+28))?0:1;
-	key_val |=(gpio_get_value(PAD_GPIO_B+30))?0:(1<<1);
-	key_val |=(gpio_get_value(PAD_GPIO_B+31))?0:(1<<2);
-	key_val |=(gpio_get_value(PAD_GPIO_B+9))?0:(1<<3);
+	// key_val = 0;
+	// key_val |=(gpio_get_value(PAD_GPIO_A+28))?0:1;
+	// key_val |=(gpio_get_value(PAD_GPIO_B+30))?0:(1<<1);
+	// key_val |=(gpio_get_value(PAD_GPIO_B+31))?0:(1<<2);
+	// key_val |=(gpio_get_value(PAD_GPIO_B+9))?0:(1<<3);
 
-
-			//设置条件为真
-		key_press_flag=1;
+		// 设置条件为真
+		// key_press_flag=1;
 		
 		
 		//唤醒队列
-		wake_up(&key_wq);
+		// wake_up(&key_wq);
+
+
+		//私有传递中断号 
+		// mytasklet.data = irq;
+		//传递中断号 工作队列
+		dev_irq = irq;
+		
+		//登记tasklet
+		// tasklet_schedule(&mytasklet); 
+
+		//登记工作
+		schedule_work(&mywork);
 
 		return IRQ_HANDLED;//当前中断处理已经完成
 }
@@ -215,15 +412,15 @@ static int __init mykey_init(void)
 	}
 
 	//由于内核已经申请过引脚，必须先释放
-	gpio_free_array(keys_gpios, ARRAY_SIZE(keys_gpios));
+	// gpio_free_array(keys_gpios, ARRAY_SIZE(keys_gpios));
 	
 	//申请一组GPIO
-	rt = gpio_request_array(keys_gpios, ARRAY_SIZE(keys_gpios));
-	if (rt < 0)	
-	{
-		printk(KERN_INFO"gpio_request_array error\n");
-		goto err_gpio_request_array;
-	}
+	// rt = gpio_request_array(keys_gpios, ARRAY_SIZE(keys_gpios));
+	// if (rt < 0)	
+	// {
+	// 	printk(KERN_INFO"gpio_request_array error\n");
+	// 	goto err_gpio_request_array;
+	// }
 	
 	//中断号：gpio_to_irq(PAD_GPIO_A+28)
 	//中断服务函数：keys_irq_handler
@@ -236,7 +433,7 @@ static int __init mykey_init(void)
 	{
 		printk("request_irq error\n");
 		
-		goto err_request_irq;
+		goto err_request1_irq;
 		
 	}
 
@@ -246,7 +443,7 @@ static int __init mykey_init(void)
 	{
 		printk("request_irq error\n");
 		
-		goto err_request_irq;
+		goto err_request2_irq;
 		
 	}
 
@@ -256,7 +453,7 @@ static int __init mykey_init(void)
 	{
 		printk("request_irq error\n");
 		
-		goto err_request_irq;
+		goto err_request3_irq;
 		
 	}
 
@@ -266,12 +463,15 @@ static int __init mykey_init(void)
 	{
 		printk("request_irq error\n");
 		
-		goto err_request_irq;
+		goto err_request4_irq;
 		
 	}
 
 
 
+	//初始化工作队列
+	
+	INIT_WORK(&mywork, mywork_handler);
 
 	//初始化等待队列
 	init_waitqueue_head(&key_wq);
@@ -285,11 +485,17 @@ static int __init mykey_init(void)
 
 
 
-err_request_irq:
-	return rt;
+err_request4_irq:
+free_irq(gpio_to_irq(PAD_GPIO_B+31),NULL);
+err_request3_irq:
+free_irq(gpio_to_irq(PAD_GPIO_B+30),NULL);
+err_request2_irq:
+free_irq(gpio_to_irq(PAD_GPIO_A+28),NULL);
+err_request1_irq:
+misc_deregister(&keys_miscdev);
 	
-err_gpio_request_array:
-	misc_deregister(&keys_miscdev);
+// err_gpio_request_array:
+// 	misc_deregister(&keys_miscdev);
 
 err_misc_register:	
 	return rt;
@@ -298,15 +504,18 @@ err_misc_register:
 
 static void __exit mykey_exit(void)
 {
+	
+
 	//释放中断
 	free_irq(gpio_to_irq(PAD_GPIO_A+28),NULL);
 	free_irq(gpio_to_irq(PAD_GPIO_B+30),NULL);
 	free_irq(gpio_to_irq(PAD_GPIO_B+31),NULL);
 	free_irq(gpio_to_irq(PAD_GPIO_B+9),NULL);
 	//解除映射
-	gpio_free_array(keys_gpios, ARRAY_SIZE(keys_gpios));
+	// gpio_free_array(keys_gpios, ARRAY_SIZE(keys_gpios));
 
-
+	//注销工作队列
+	cancel_work_sync(&mywork);
 
 		
 	//注销混杂设备
